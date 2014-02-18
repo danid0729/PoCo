@@ -1,0 +1,26 @@
+//Attempts to alert the user when the application is using over a certain percentage of available memory
+
+InterruptToCheckMem(Double percent; Long interval) :
+@msg[`String{More than $percent\% of the memory available to the VM has been consumed}`]
+(<Action(`@first[%]`) => + `mail.interrupts.InterruptsGen.<init>($interval)`>
+<~Result(`mail.interrupts.InterruptsGen.<init>($interval)`, `%`) => + `mail.interrupts.InterruptsGen.<init>($interval)`)>*
+<Result(`mail.interrupts.InterruptsGen.<init>($interval)`, `@ig[%]`) => +`$ig.start()`>
+<~Result(`$ig.start()`, `%`), +`$ig.start()`)>*
+<Result(`$ig.start()`, `%`) => +`$first`>
+     (<Result(`mail.interrupts.InterruptGen.interrupt()`, `%`) => +`MemoryAboveThreshold($percent)`>
+          <~Result(`MemoryAboveThreshold($percent)`, `%`) => +`MemoryAboveThreshold($percent)`>*
+          ( <Result(`MemoryAboveThreshold($percent)`, `Boolean{true}`) => +`$Warning($msg)`>
+               <~Result(`$Warning($msg)`, `%`) => +`$Warning($msg)`)>*
+               <_  => Neutral>*
+          | <Result(`%`, `Boolean{false}`) => Neutral> )
+     | <_, Neutral> )*
+)*
+
+transaction bool MemoryAboveThreshold(Double percent)
+{
+     Runtime run = Runtime.getRuntime();
+     long totalM = run.totalMemory();
+     long maxM = run.maxMemory();
+     Double perc = (totalM/maxM)*100;
+     return perc > percent;
+}

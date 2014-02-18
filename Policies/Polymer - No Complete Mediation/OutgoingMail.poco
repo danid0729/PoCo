@@ -1,0 +1,32 @@
+//Logs all sent mail
+//Alerts the user that an email is being sent
+//BCCs a specific email address on all messages
+//Appends contact information to end of message
+
+OutgoingMail(String ContactInfo) :
+map(Union, -`$SendMail(%)`,
+     <~Action(`$SendMail(%)`) => Neutral >* 
+     <Action(`$SendMail(@msg[%])`) => +`log($msg)`>
+     <~(Result(`log($msg)`, `%`)|Result(`$SendMail(%)`, `%`)) => +`log($msg)`>* 
+     (<Result(`$SendMail(%)`, `%`) => Neutral
+     | <Result(`log($msg)`, `%`) => +`$Confirm($msg)`>
+          <~(Result(`$Confirm($msg)`, `%`)|Result(`$SendMail(%)`, `%`)) => +`$Confirm($msg)`>* 
+          (<Result(`$SendMail(%)`, `%`) => Neutral
+          | <Result(`$Confirm($msg)`, ~`Integer{JOptionPane.OK_OPTION}`) => +`null`>
+          | <Result(`$Confirm($msg)`, `Integer{JOptionPane.OK_OPTION}`) => +`$msg.AddBCC(String{user@domain})`>
+               <~(Result(`$msg.AddBCC(String{user@domain})`, `%`)|Result(`$SendMail(%)`, `%`)) => +`$msg.AddBCC(String{user@domain})`>*     
+               (<Result(`$SendMail(%)`, `%`) => Neutral
+               | <Result(`%`, `@msg[%]}`) => +`$msg.getContent()`>
+                    <~(Result(`$msg.getContent()`, `%`)|Result(`$SendMail(%)`, `%`)) => +`$msg.getContent()`)>* 
+                    <Result(`$msg.getContent()`, `@content[%]`) => +`strCat($content, $ContactInfo)`>
+                    <~(Result(`strCat($content, $ContactInfo)`, `%`)|Result(`$SendMail(%)`, `%`)) => +`strCat($content, $ContactInfo)`>*
+                    (<Result(`$SendMail(%)`, `%`) => Neutral>        
+                    | <Result(`strCat($content, $ContactInfo)`,`@content[%]`) => +`$msg.setContent($content)`>
+                         <~(Result(`$msg.setContent($content)`, `%`)|Result(`$SendMail(%)`, `%`)) => +`$msg.setContent($content)`>*
+                         (<Result(`$SendMail(%)`, `%`) => Neutral
+                         | <Result(`$msg.setContent($content)`, `@msg[%]`) => +`mail.SendMail($msg)`>
+                               <~(Result(`mail.SendMail($msg)`, `%`)|Result(`$SendMail(%)`, `%`)) => +`mail.SendMail($msg)`>*
+                               <~Result(`mail.SendMail($msg)`, `%` => +`mail.SendMail($msg)`)>)))))
+)* 
+
+private static void log(Message m) { //Needs to be fleshed out }

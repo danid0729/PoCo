@@ -1,0 +1,29 @@
+//Attempts to log all input events and sub-policy results
+
+Audit(Policy p; String f) :
+<Action(`@act[%]`) && @out[$p()] => +`fopen($f)`)>
+<~Result(`fopen($f)`, `%`) => +`fopen($f)`>* 
+<Result(`fopen($f)`, `@ps[%]`) => +`log($ps, $out, $act)`>
+<~ Result(`log($ps, $out, $act)`, `%`) => +`log($ps, $out, $act)`)>*
+(    
+     ( <!infinite(Conjunction(Positive(Actions($out)), +~`$act`)) => $out>
+          | <Subset($out, +`$act`) => +`$act`>
+          | <!infinite(Positive(Results($out)) => $out>
+          | <!Subset($out, -`$act`) && !Subset($out, +`$act`) => +`$act`>
+          | <_ => $out>)
+     <Result(`%`, `%`) => $p()>*
+     <Action(`@act[%]`)&&@out[p] => +`log($ps, $out, $act)`>
+     <~Result(`log($ps, $out, $act)`, `%`) => +`log($ps, $out, $act)`)>* 
+)*
+
+transaction static PrintStream fopen(String fn) 
+{
+     return new PrintStream(new BufferedOutputStream(new FileOutputStream(fn)), true); 
+}
+
+transaction static void log(PrintStream ps, SRE s, Action a)
+{
+     ps.println("On trigger action " + a.toString());
+     ps.println("Subpolicy output: " + s.toString());
+     ps.println("-------------------------------------------------\n");
+}

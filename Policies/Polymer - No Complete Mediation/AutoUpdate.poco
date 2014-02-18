@@ -1,0 +1,28 @@
+//Attempt to dynamically update sub-policy
+
+AutoUpdate(Policy p, String jarUrl, int updateType, int updateIncrement, String infoDir):
+<Action(`@in[%]`) || Result(`%`, `@in[%]`) => + `getPolicy($p, $jarUrl, $updateType, $updateIncrement, $infoDir, $input)`
+<~Result(`getPolicy($p, $jarUrl, $updateType, $updateIncrement, $infoDir, $input)`, `%`) => +`getPolicy($p, $jarUrl, $updateType, $updateIncrement, $infoDir, $input)`>*
+<Result(`getPolicy(%)`, `@p[(%,)*currentResult: @output[%](,%)*]`) => $currentResult>
+(<Action(`@gp[getPolicy($p, $jarUrl, $updateType, $updateIncrement, $infoDir, %)]`) => +`$gp`>
+     <~Result(`$gp`, `@p[%]`) => +`$gp`>* 
+     <Result(`$gp`, `@p[%]`) => Neutral>
+| <_ => $p()>)*
+
+transaction Policy getPolicy(Policy p, String jarUrl, int updateType, int updateIncrement, String infoDir, Event input)
+{
+    String policySpec = getRemotePolicy(…);
+        if(input != null)
+            p = new policy(policySpec, input); //initializes policy with first match done on input
+        else
+            p = new policy(policySpec); //initializes policy with no matches done
+        //start timer that calls getPolicy(p, jarUrl, updateType, updateIncrement, infoDir, null)
+        Timer timer = new Timer(); 
+        timer.schedule(new TimerTask() {
+             @Override
+             public void run() {
+                  getPolicy(p, jarUrl, updateType, updateIncrement, infoDir, null)
+             }
+        }, updateIncrement*60*1000);
+        return p;
+} 

@@ -1,0 +1,11 @@
+//Asks user to confirm HTTP connections
+
+ConfirmAndAllowOnlyHTTP() :
+@ports[`Integer{80|443}`]
+@message(call)[`String{The program is attempting to make an HTTP connection via: $call. Do you want to allow this connection?}`]
+map (Union, -`$NetworkConnection($ports)`,
+     <~Action(`$NetworkConnection($ports)`) => Neutral>* 
+     <Action(`@call[$NetworkConnection($ports)]`) => +`$Confirm($message)`>
+     ( <Result(`$Confirm($message)`, `Integer{JOptionPane.OK_OPTION}`) => +`$call`)>
+               | <_ => -`$call`)
+)*

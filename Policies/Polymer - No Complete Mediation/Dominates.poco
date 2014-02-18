@@ -1,0 +1,5 @@
+//If p1 has no opinion, return it's output. Otherwise return p2's output
+
+Dominates(Policy p1, Policy p2) :
+(<$p1() = Neutral => $p2()>
+| <_ => $p1()>)*
