@@ -1,0 +1,3 @@
+//Returns neutral on all events
+
+Trivial(): <_ => Neutral>*

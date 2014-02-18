@@ -1,0 +1,11 @@
+//Prompts user to confirm saving files with certain extensions
+
+Attachments() :
+@ext[`.(exe|vbs|hta|mdb|bad)`]
+@message(call) [`The target is creating a file via: $call. This is a dangerous file type. Do you want to create this file?`]
+map (Union, -`$FileWrite($ext)`,
+     <~Action(`$FileWrite($ext)`) => Neutral>* 
+     < Action(`@call[$FileWrite($ext)]`) => +`$Confirm($message($call))`>
+     ( <Result(`$Confirm($message($call))`, `Integer{JOptionPane.OK_OPTION}`) => +`$call`>
+              | <_ => -`$call`)
+)* 

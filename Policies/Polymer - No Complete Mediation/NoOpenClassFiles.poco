@@ -1,0 +1,3 @@
+//Suggests disallowing any file with the .class extension
+
+NoOpenClassFiles() : <_ => -`File.<init>(String{%.class})`>*

@@ -1,0 +1,5 @@
+//Suggests disallowing network connections to any ports that are not 143,993,25,110,995
+
+AllowOnlyMIME() :
+@ports[~`Integer{143|993|25|110|995}`]
+<_ => -`$NetworkConnection($ports)`>*
