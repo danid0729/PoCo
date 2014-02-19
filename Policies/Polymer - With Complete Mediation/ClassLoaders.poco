@@ -1,0 +1,23 @@
+//Suggests disallowing instantiation of ClassLoader outside of trusted libraries 
+
+ClassLoaders() :
+map (Union, -`%ClassLoader.<init>(%)%`,
+     <~Action(`%ClassLoader.<init>(%)%`), Neutral>* 
+     <Action(@call[`%ClassLoader.<init>(%)]%`) => +`Exception.<init>()`>
+     <~(Result(`Exception.<init>()`, `%`)|Result(`ClassLoader.<init>(%)`, `%`)) => +`Exception.<init>()`>*
+     (<Result(`%ClassLoader.<init>(%)%`, `%`)) => Neutral>
+     | <Result(`Exception.<init>()`, `@exception[%]`) => +`$exception.getStackTrace()`>
+          <~(Result(`$exception.getStackTrace()`, `%`)|Result(`ClassLoader.<init>(%)`, `%`)) => +`$exception.getStackTrace()`>*
+              (<Result(`%ClassLoader.<init>(%)%`, `%`)) => Neutral>
+              | <Result(`$exception.getStackTrace()`, `@stacktrace[%]`) =>  +`IsTrustedPackage($stacktrace)`)>
+                   <~(Result(`IsTrustedPackage($stacktrace)`, `%`)|Result(`ClassLoader.<init>(%)`, `%`)) => +`IsTrustedPackage($stacktrace)`>*
+                        (<Result(`%ClassLoader.<init>(%)%`, `%`)) => Neutral>
+                        | <Result(`IsTrustedPackage($stacktrace)`, `Boolean{true}) =>  +`$call`>
+                        | <Result(`IsTrustedPackage($stacktrace)`, Boolean{false}`) => -`$call`>)))
+)*
+
+transaction static Boolean IsTrustedPackage(stacktrace) 
+{
+     //still needs to be fleshed out
+     //[java.|javax.|org.apache.|com.sun.|sun.] in stacktrace
+}

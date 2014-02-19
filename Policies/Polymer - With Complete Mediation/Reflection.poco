@@ -1,0 +1,3 @@
+//Suggests disallowing reflection on all PoCo policy classes
+
+Reflection() : <_ => -`%Method{(%,)*Name: %PoCo%(,%)*}.invoke(%)%`>*

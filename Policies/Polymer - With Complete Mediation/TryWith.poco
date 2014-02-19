@@ -1,0 +1,8 @@
+//If p1 returns the polymer results of Irrelevant, OK or Insert return it's output. Otherwise return p2's output
+
+TryWith(Policy p1, Policy p2) :
+(<$p1() = Neutral => $p1()>
+| <Action(`@in[%]`) || Result (`%`, `@in[%]`) && +`$in` = $p1() => $p1()>
+| <Action(`@in[%]`) || Result (`%`, `@in[%]`)
+     && Conjunction (Action($p1()), +~`$in`) != Neutral => $p1()>
+| <_ => $p2()>)*

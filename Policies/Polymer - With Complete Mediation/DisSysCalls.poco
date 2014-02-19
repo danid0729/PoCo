@@ -1,0 +1,3 @@
+//Always suggests that runtime.exec be disallowed
+
+DisSysCalls() : <_ => -`%Runtime.exec(%)%`>*

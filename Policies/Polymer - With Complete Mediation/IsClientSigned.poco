@@ -1,0 +1,18 @@
+//Combinator that returns result of first subpolicy if certificate exists
+
+IsClientSigned(Policy p1, Policy p2):
+     <~Action(`isSigned()`) => Union($p2(),  +`isSigned()`)>*
+     (<Result(`isSigned()`, `Boolean{true}`) => $p1()>
+          <_ => $p1()>*
+     | <Action(`isSigned()`, `Boolean{false}`) => $p2()>
+          <_ => $p2()>*)
+
+transaction static Boolean isSigned() {
+     Enumeration e = PoCo.getJarFile().entries();
+     while(e.hasMoreElements()){
+          Certificate[] ca = ((JarEntry)e.nextElement()).getCertificates();
+          if (ca != null && ca.length > 0 && ca[0] != null)
+               return true;
+     }
+     return false; 
+}

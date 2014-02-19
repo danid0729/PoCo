@@ -1,0 +1,39 @@
+//Pre-defined helper REs
+
+@FileWrite (extension)[`File{name: String{%$extension}}.createNewFile()
+| File.createTempFile(%, %, %)
+| File{%}.renameTo(File:{name: String{%$extension}})
+| FileOutputStream.<init>(String{%$extension}, %)
+| FileOutputStream.<init>(File{name: String{%$extension}})
+| RandomAccessFile.<init>(String{%$extension}, %)
+| RandomAccessFile.<init>(File{name: String{%$extension}}, %)`]
+
+@Confirm(message)
+[showConfirmDialog(null, String{$message}
+     , String{Security Question} 
+     , Integer{JOptionPane.YES_NO_OPTION})] 
+
+@Warning(message)
+[showConfirmDialog(null, String{$message}
+      , String{Warning}
+      , Integer{JOptionPane.WARNING_MESSAGE}`]
+
+@NetworkConnection(ports)[
+`mail.(imap.IMAPStore|pop3.POP3Store|smtp.SMTPTransport){%}.protocolConnect(%, $ports%)
+| java.net.Socket.<init>(%, $ports%)
+| DatagramSocket{%}.send(DatagramPacket{port: $ports})
+|  java.net.MulticastSocket{port: $ports}.(leave|join)Group(%)
+| java.net.MulticastSocket{%}.send(DatagramPacket{port: $ports}, %)`]
+
+@GetMail[`com.sun.mail.imap.IMAPFolder.expunge()
+| com.sun.mail.imap.IMAPFolder.fetch(%)
+| com.sun.mail.imap.IMAPFolder.getMessage(%)
+| com.sun.mail.imap.IMAPFolder.getMessageByUID(%)
+| com.sun.mail.imap.IMAPFolder.search(%)
+| com.sun.mail.pop3.POP3Folder.expunge()
+| com.sun.mail.pop3.POP3Folder.fetch(%)
+| com.sun.mail.pop3.POP3Folder.getMessage(%)`]
+
+@SendMail (msg) [`javax.mail.Transport.send($msg)
+| javax.mail.Transport.send($msg, %)
+| com.sun.mail.smtp.SMTPTransport.sendMessage($msg, %)`]

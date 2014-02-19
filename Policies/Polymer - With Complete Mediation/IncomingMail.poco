@@ -1,0 +1,13 @@
+//Logs all GetMail actions and changes subject of possible spam messages to indicate that they are spam
+
+IncomingMail() :
+map (Union,  -`$GetMail | Message{%}.getSubject()`,
+     <~Result(`($GetMail | Message{%}.getSubject())`, `%`) => Neutral>* 
+     (<Result(`$GetMail`, `@result[%]`) => +`log($result)`>
+          <~Result(`log($result)`, `%`) => +`log($result)`)>*)
+     | (<Result(`@message[Message{%}].getSubject()`, `%`) => +`spamifySubject($message)`>
+          <~Result(`spamifySubject($message)`, `%`) => +`spamifySubject($message)`)>)
+)* 
+
+private static void log(Message m) { //Needs to be fleshed out }
+private static String spamifySubject(Message m) { //Needs to be fleshed out }
