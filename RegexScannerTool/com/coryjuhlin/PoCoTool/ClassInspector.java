@@ -18,27 +18,14 @@ public class ClassInspector extends ClassVisitor {
 	@Override
     public void visit(int version, int access, String name, String signature,
     		String superName, String[] interfaces) {
-		//System.out.format("%s extends %s {\n", name, superName);
 		className = name.replace('/', '.');
-	}
-	
-	@Override
-	public void visitEnd() {
-		//System.out.println("}");
 	}
 	
 	@Override
 	public MethodVisitor visitMethod(int access, String name, String desc,
             String signature, String[] exceptions) {
-		//System.out.format("\t%s%s\n", name, desc);
 		callList.add(createMethodName(className,name,desc));
 		return null;
-	}
-	
-	@Override
-	public void visitInnerClass(String name, String outerName,
-            String innerName, int access) {
-		//System.out.format("Inner class of %s: %s\n", outerName, name);
 	}
 	
 	public static String createMethodName(String owner, String name, String desc) {
@@ -59,9 +46,16 @@ public class ClassInspector extends ClassVisitor {
 		int argListSize = END_ARG_LIST - START_ARG_LIST;
 		while(argListSize > 0) {
 			int startLocation = END_ARG_LIST - argListSize;
-			int endLocation = startLocation + 1;
 			
-			char code = desc.charAt(startLocation);
+			// Skip through all array declarations to find type code
+			int arrayDecOffset = startLocation;
+			char code;
+			while((code = desc.charAt(arrayDecOffset)) == '[') {
+				arrayDecOffset++;
+			}
+			
+			int endLocation = arrayDecOffset + 1;
+
 			
 			if(code == 'L') {
 				// For Object names, the end is up to (and including) the semicolon
