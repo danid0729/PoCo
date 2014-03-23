@@ -58,7 +58,7 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 	private ArrayList<String> regexes;
 	private LinkedHashMap<String, ArrayList<String>> mappings;
 	
-	private File regexFile;
+	private File regexFile = null;
 	
 	
 	public static void saveDigestToDirectory(String dir, LinkedHashSet<String> set) {
@@ -351,6 +351,10 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 		}
 		
 		regexes = new ArrayList<>();
+		
+		if(regexFile == null) {
+			return;
+		}
 		
 		try(BufferedReader br = new BufferedReader(new FileReader(regexFile))) {
 			String regex = null;
