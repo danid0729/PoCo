@@ -47,6 +47,7 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 	private JButton regexButton;
 	
 	private JButton generateButton;
+	private JLabel generationTimeLabel;
 	
 	private JList<String> regexList;
 	private JList<String> methodList;
@@ -59,7 +60,7 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 	private LinkedHashMap<String, ArrayList<String>> mappings;
 	
 	private File regexFile = null;
-	
+		
 	
 	public static void saveDigestToDirectory(String dir, LinkedHashSet<String> set) {
 		try (FileWriter textFile = new FileWriter(dir + "method_list.txt")) {
@@ -100,9 +101,16 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 				regexFileField.setToolTipText(regexFile.getPath());
 			}
 		} else if(e.getSource() == generateButton) {
+			long startTime = System.nanoTime();
 			regexList.clearSelection();
 			generateMappings();
 			regexList.setListData(regexes.toArray(new String[0]));
+			long endTime = System.nanoTime();
+			long generationTime = endTime - startTime;
+			double millis = generationTime / 1000000d;
+			
+			String genTimeText = String.format("Generation time: %.2f ms", millis);
+			generationTimeLabel.setText(genTimeText);
 		}
 		
 		if(filesToScan.size() > 0) {
@@ -190,6 +198,8 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 		generateButton = new JButton("Generate Mappings");
 		generateButton.addActionListener(this);
 		
+		generationTimeLabel = new JLabel();
+		
 		
 		fileSelectTabPanel.add(fileButtonPanel);
 		
@@ -198,6 +208,8 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 		fileSelectTabPanel.add(regexPanel);
 		
 		fileSelectTabPanel.add(generateButton);
+		
+		fileSelectTabPanel.add(generationTimeLabel);
 		
 		fileSelectionLayout.putConstraint(SpringLayout.WEST, 
 										  fileListScroller, 
@@ -268,6 +280,18 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 		fileSelectionLayout.putConstraint(SpringLayout.EAST, 
 				  generateButton, 
 				  -15, 
+				  SpringLayout.EAST, 
+				  fileSelectTabPanel);
+		
+		fileSelectionLayout.putConstraint(SpringLayout.SOUTH, 
+				  generationTimeLabel, 
+				  -15, 
+				  SpringLayout.NORTH, 
+				  generateButton);
+		
+		fileSelectionLayout.putConstraint(SpringLayout.EAST, 
+				  generationTimeLabel, 
+				  -20, 
 				  SpringLayout.EAST, 
 				  fileSelectTabPanel);
 		
