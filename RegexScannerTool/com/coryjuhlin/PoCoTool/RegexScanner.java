@@ -14,8 +14,12 @@ import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -129,7 +133,7 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 		classFileChooser.setDialogTitle("Add Class Files");
 		classFileChooser.setApproveButtonText("Add");
 		FileNameExtensionFilter fileFilter = new FileNameExtensionFilter("Compiled Java Classes",
-				"class");
+				"class", "jar");
 		classFileChooser.setFileFilter(fileFilter);
 		classFileChooser.setMultiSelectionEnabled(true);
 		classFileChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
@@ -288,19 +292,61 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 		appframe.setVisible(true);
 	}
 	
+	private void scanJARFile(File toScan, HashSet<String> methods) {
+		try(JarFile jarFile = new JarFile(toScan)) {
+			Enumeration<JarEntry> entries = jarFile.entries();
+			ArrayList<JarEntry> jarClassFiles = new ArrayList<>();
+			
+			// Find every .class file in JAR
+			while(entries.hasMoreElements()) {
+				JarEntry entry = entries.nextElement();
+				String elementName = entry.getName();
+				int extensionStart = elementName.lastIndexOf('.');
+				
+				if(extensionStart < 0) {
+					continue;
+				}
+				
+				String extension = elementName.substring(elementName.lastIndexOf('.'));
+				
+				if(extension.equals(".class")) {
+					jarClassFiles.add(entry);
+				}
+			}
+			
+			// Parse each .class file
+			for(JarEntry classFile : jarClassFiles) {
+				ClassReader reader = new ClassReader(jarFile.getInputStream(classFile));
+				reader.accept(new ClassInspector(methods), 0);
+			}
+		} catch(IOException e) {
+			System.out.println("\n\nERROR reading JAR file!");
+			System.out.println(e.getMessage());
+			e.printStackTrace();
+			System.exit(-1);
+		}
+	}
+	
 	private void generateMappings() {
 		LinkedHashSet<String> methods = new LinkedHashSet<>();
 		
-		for(int i = 0; i < filesToScan.size(); i++) {			
-			try(FileInputStream file = new FileInputStream(filesToScan.get(i))) {
-				ClassReader reader = new ClassReader(file);
-				reader.accept(new ClassInspector(methods), 0);
-			} catch (FileNotFoundException e) {
-				System.out.println(e.getMessage());
-				continue;
-			} catch (IOException e) {
-				System.out.println(e.getMessage());
-				System.exit(-1);
+		for(int i = 0; i < filesToScan.size(); i++) {
+			File toScan = filesToScan.get(i);
+			String extension = toScan.getName().substring(toScan.getName().lastIndexOf('.'));
+			
+			if(extension.equals(".jar")) {
+				scanJARFile(toScan, methods);
+			} else {
+				try(FileInputStream file = new FileInputStream(filesToScan.get(i))) {
+					ClassReader reader = new ClassReader(file);
+					reader.accept(new ClassInspector(methods), 0);
+				} catch (FileNotFoundException e) {
+					System.out.println(e.getMessage());
+					continue;
+				} catch (IOException e) {
+					System.out.println(e.getMessage());
+					System.exit(-1);
+				}
 			}
 		}
 		
