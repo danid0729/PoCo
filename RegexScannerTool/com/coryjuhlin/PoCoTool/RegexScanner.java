@@ -1,5 +1,9 @@
 package com.coryjuhlin.PoCoTool;
 
+/* This application requires the ASM 4.2 library for class file analysis.
+ * You can download it from http://asm.ow2.org
+ */
+
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
@@ -7,11 +11,8 @@ import java.awt.event.ActionListener;
 import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.ObjectOutputStream;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -56,28 +57,19 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 	private JFileChooser classFileChooser;
 	private JFileChooser regexFileChooser;
 		
+	private LinkedHashSet<String> methods;
 	private ArrayList<String> regexes;
 	private LinkedHashMap<String, ArrayList<String>> mappings;
 	
 	private File regexFile = null;
 		
-	
-	public static void saveDigestToDirectory(String dir, LinkedHashSet<String> set) {
-		try (FileWriter textFile = new FileWriter(dir + "method_list.txt")) {
-			for(String methodCall : set) {
-				textFile.write(methodCall);
-				textFile.write('\n');
+	public RegexScanner() {
+		// Put UI Initialization on the Swing UI Event Thread
+		SwingUtilities.invokeLater(new Runnable() {
+			public void run() {
+				initializeUI();
 			}
-		} catch (IOException e) {
-			System.out.format("\nError writing text digest: %s\n", e.getMessage());
-		}
-		
-		try(FileOutputStream fo = new FileOutputStream(dir + "method_list.obj");
-				ObjectOutputStream oo = new ObjectOutputStream(fo)) {
-			oo.writeObject(set);
-		} catch (Exception e) {
-			System.out.format("\nError writing object digest: %s\n", e.getMessage());
-		}
+		});
 	}
 	
 	public void actionPerformed(ActionEvent e) {
@@ -101,16 +93,18 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 				regexFileField.setToolTipText(regexFile.getPath());
 			}
 		} else if(e.getSource() == generateButton) {
-			long startTime = System.nanoTime();
+			generationTimeLabel.setText("Generating...");
 			regexList.clearSelection();
+			
+			long startTime = System.nanoTime();
 			generateMappings();
-			regexList.setListData(regexes.toArray(new String[0]));
 			long endTime = System.nanoTime();
 			long generationTime = endTime - startTime;
 			double millis = generationTime / 1000000d;
 			
 			String genTimeText = String.format("Generation time: %.2f ms", millis);
 			generationTimeLabel.setText(genTimeText);
+			regexList.setListData(regexes.toArray(new String[0]));
 		}
 		
 		if(filesToScan.size() > 0) {
@@ -154,8 +148,6 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 		regexFileChooser.setFileFilter(textFileFilter);
 		regexFileChooser.setMultiSelectionEnabled(false);
 		regexFileChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
-		
-		
 		
 		
 		// Create panel for file selections
@@ -210,90 +202,49 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 		fileSelectTabPanel.add(generateButton);
 		
 		fileSelectTabPanel.add(generationTimeLabel);
-		
-		fileSelectionLayout.putConstraint(SpringLayout.WEST, 
-										  fileListScroller, 
-										  15, 
-										  SpringLayout.WEST, 
-										  fileSelectTabPanel);
-		
-		fileSelectionLayout.putConstraint(SpringLayout.NORTH, 
-										  fileListScroller, 
-										  10, 
-										  SpringLayout.NORTH, 
-										  fileSelectTabPanel);
-		
-		fileSelectionLayout.putConstraint(SpringLayout.SOUTH, 
-				  fileListScroller, 
-				  -15, 
-				  SpringLayout.NORTH, 
-				  fileButtonPanel);
-		
-		fileSelectionLayout.putConstraint(SpringLayout.SOUTH, 
-				  fileButtonPanel, 
-				  -15, 
-				  SpringLayout.SOUTH, 
-				  fileSelectTabPanel);
-		
-		fileSelectionLayout.putConstraint(SpringLayout.WEST, 
-				  fileButtonPanel, 
-				  15, 
-				  SpringLayout.WEST, 
-				  fileSelectTabPanel);
-		
-		fileSelectionLayout.putConstraint(SpringLayout.EAST, 
-				  fileListScroller, 
-				  -15, 
-				  SpringLayout.HORIZONTAL_CENTER, 
-				  fileSelectTabPanel);
-		
-		fileSelectionLayout.putConstraint(SpringLayout.EAST, 
-				  fileButtonPanel, 
-				  -15, 
-				  SpringLayout.HORIZONTAL_CENTER, 
-				  fileSelectTabPanel);
-		
-		fileSelectionLayout.putConstraint(SpringLayout.WEST, 
-				  regexPanel, 
-				  15, 
-				  SpringLayout.HORIZONTAL_CENTER, 
-				  fileSelectTabPanel);
-		
-		fileSelectionLayout.putConstraint(SpringLayout.EAST, 
-				  regexPanel, 
-				  -15, 
-				  SpringLayout.EAST, 
-				  fileSelectTabPanel);
-		
-		fileSelectionLayout.putConstraint(SpringLayout.NORTH, 
-				  regexPanel, 
-				  10, 
-				  SpringLayout.NORTH, 
-				  fileSelectTabPanel);
-		
-		fileSelectionLayout.putConstraint(SpringLayout.SOUTH, 
-				  generateButton, 
-				  -15, 
-				  SpringLayout.SOUTH, 
-				  fileSelectTabPanel);
-		
-		fileSelectionLayout.putConstraint(SpringLayout.EAST, 
-				  generateButton, 
-				  -15, 
-				  SpringLayout.EAST, 
-				  fileSelectTabPanel);
-		
-		fileSelectionLayout.putConstraint(SpringLayout.SOUTH, 
-				  generationTimeLabel, 
-				  -15, 
-				  SpringLayout.NORTH, 
-				  generateButton);
-		
-		fileSelectionLayout.putConstraint(SpringLayout.EAST, 
-				  generationTimeLabel, 
-				  -20, 
-				  SpringLayout.EAST, 
-				  fileSelectTabPanel);
+
+		fileSelectionLayout.putConstraint(SpringLayout.WEST, fileListScroller,
+				15, SpringLayout.WEST, fileSelectTabPanel);
+
+		fileSelectionLayout.putConstraint(SpringLayout.NORTH, fileListScroller,
+				10, SpringLayout.NORTH, fileSelectTabPanel);
+
+		fileSelectionLayout.putConstraint(SpringLayout.SOUTH, fileListScroller,
+				-15, SpringLayout.NORTH, fileButtonPanel);
+
+		fileSelectionLayout.putConstraint(SpringLayout.SOUTH, fileButtonPanel,
+				-15, SpringLayout.SOUTH, fileSelectTabPanel);
+
+		fileSelectionLayout.putConstraint(SpringLayout.WEST, fileButtonPanel,
+				15, SpringLayout.WEST, fileSelectTabPanel);
+
+		fileSelectionLayout.putConstraint(SpringLayout.EAST, fileListScroller,
+				-15, SpringLayout.HORIZONTAL_CENTER, fileSelectTabPanel);
+
+		fileSelectionLayout.putConstraint(SpringLayout.EAST, fileButtonPanel,
+				-15, SpringLayout.HORIZONTAL_CENTER, fileSelectTabPanel);
+
+		fileSelectionLayout.putConstraint(SpringLayout.WEST, regexPanel, 15,
+				SpringLayout.HORIZONTAL_CENTER, fileSelectTabPanel);
+
+		fileSelectionLayout.putConstraint(SpringLayout.EAST, regexPanel, -15,
+				SpringLayout.EAST, fileSelectTabPanel);
+
+		fileSelectionLayout.putConstraint(SpringLayout.NORTH, regexPanel, 10,
+				SpringLayout.NORTH, fileSelectTabPanel);
+
+		fileSelectionLayout.putConstraint(SpringLayout.SOUTH, generateButton,
+				-15, SpringLayout.SOUTH, fileSelectTabPanel);
+
+		fileSelectionLayout.putConstraint(SpringLayout.EAST, generateButton,
+				-15, SpringLayout.EAST, fileSelectTabPanel);
+
+		fileSelectionLayout.putConstraint(SpringLayout.SOUTH,
+				generationTimeLabel, -15, SpringLayout.NORTH, generateButton);
+
+		fileSelectionLayout
+				.putConstraint(SpringLayout.EAST, generationTimeLabel, -20,
+						SpringLayout.EAST, fileSelectTabPanel);
 		
 		// Set up tab for displaying regex mappings
 		regexList = new JList<>();
@@ -352,7 +303,7 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 	}
 	
 	private void generateMappings() {
-		LinkedHashSet<String> methods = new LinkedHashSet<>();
+		methods = new LinkedHashSet<>();
 		
 		for(int i = 0; i < filesToScan.size(); i++) {
 			File toScan = filesToScan.get(i);
@@ -373,6 +324,8 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 				}
 			}
 		}
+		
+		System.out.format("Number of methods: %d\n\n", methods.size());
 		
 		regexes = new ArrayList<>();
 		
@@ -411,7 +364,6 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 	}
 	
 	public static void main(String[] args) {
-		new RegexScanner().initializeUI();
+		new RegexScanner();
 	}
-
 }
