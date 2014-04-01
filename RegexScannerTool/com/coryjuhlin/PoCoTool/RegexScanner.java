@@ -19,6 +19,7 @@ import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.concurrent.ExecutionException;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.regex.Matcher;
@@ -32,6 +33,8 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 import org.objectweb.asm.ClassReader;
 
 public class RegexScanner implements ActionListener, ListSelectionListener {
+	public static final boolean DEBUG_MODE = false;
+	
 	private JFrame appframe;
 	
 	private JPanel fileSelectTabPanel;
@@ -56,23 +59,35 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 	
 	private JFileChooser classFileChooser;
 	private JFileChooser regexFileChooser;
-		
-	private LinkedHashSet<String> methods;
-	private ArrayList<String> regexes;
-	private LinkedHashMap<String, ArrayList<String>> mappings;
+
+	private LinkedHashMap<String, ArrayList<String>> generatedMappings;
 	
 	private File regexFile = null;
+	
+	private long generateStartTime = 0l;
 		
 	public RegexScanner() {
+		if(DEBUG_MODE) {
+			System.out.println("Init, before UI init: " + Thread.currentThread().getId());
+		}
+		
 		// Put UI Initialization on the Swing UI Event Thread
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() {
+				if(DEBUG_MODE) {
+					System.out.println("Init UI: " + Thread.currentThread().getId());
+				}
+				
 				initializeUI();
 			}
 		});
 	}
 	
 	public void actionPerformed(ActionEvent e) {
+		if(DEBUG_MODE) {
+			System.out.println("actionPerformed: " + Thread.currentThread().getId());
+		}
+		
 		if(e.getSource() == addFileButton) {
 			int returnVal = classFileChooser.showOpenDialog(appframe);
 			if(returnVal == JFileChooser.APPROVE_OPTION) {
@@ -94,17 +109,17 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 			}
 		} else if(e.getSource() == generateButton) {
 			generationTimeLabel.setText("Generating...");
-			regexList.clearSelection();
+			addFileButton.setEnabled(false);
+			removeFileButton.setEnabled(false);
+			removeFileButton.setEnabled(false);
+			regexButton.setEnabled(false);
 			
-			long startTime = System.nanoTime();
-			generateMappings();
-			long endTime = System.nanoTime();
-			long generationTime = endTime - startTime;
-			double millis = generationTime / 1000000d;
+			generateStartTime = System.nanoTime();
 			
-			String genTimeText = String.format("Generation time: %.2f ms", millis);
-			generationTimeLabel.setText(genTimeText);
-			regexList.setListData(regexes.toArray(new String[0]));
+			File[] files = new File[filesToScan.size()];
+			filesToScan.copyInto(files);
+			
+			(new JavaFileLoader(files, regexFile)).execute();
 		}
 		
 		if(filesToScan.size() > 0) {
@@ -119,8 +134,28 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 			return;
 		}
 		String expr = regexList.getSelectedValue();
-		ArrayList<String> mappedMethods = mappings.get(expr);
+		ArrayList<String> mappedMethods = generatedMappings.get(expr);
 		methodList.setListData(mappedMethods.toArray(new String[0]));
+	}
+	
+	public void generateComplete() {
+		if(generatedMappings != null) {
+			long endTime = System.nanoTime();
+			long generationTime = endTime - generateStartTime;
+			double millis = generationTime / 1000000d;
+			
+			String genTimeText = String.format("Generation time: %.2f ms", millis);
+			generationTimeLabel.setText(genTimeText);
+			
+			regexList.setListData(generatedMappings.keySet().toArray(new String[0]));
+		} else {
+			generationTimeLabel.setText(null);
+		}
+		
+		addFileButton.setEnabled(true);
+		removeFileButton.setEnabled(true);
+		removeFileButton.setEnabled(true);
+		regexButton.setEnabled(true);
 	}
 
 	public void initializeUI() {
@@ -267,7 +302,7 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 		appframe.setVisible(true);
 	}
 	
-	private void scanJARFile(File toScan, HashSet<String> methods) {
+	private static void scanJARFile(File toScan, HashSet<String> methods) {
 		try(JarFile jarFile = new JarFile(toScan)) {
 			Enumeration<JarEntry> entries = jarFile.entries();
 			ArrayList<JarEntry> jarClassFiles = new ArrayList<>();
@@ -298,72 +333,105 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 			System.out.println("\n\nERROR reading JAR file!");
 			System.out.println(e.getMessage());
 			e.printStackTrace();
-			System.exit(-1);
-		}
-	}
-	
-	private void generateMappings() {
-		methods = new LinkedHashSet<>();
-		
-		for(int i = 0; i < filesToScan.size(); i++) {
-			File toScan = filesToScan.get(i);
-			String extension = toScan.getName().substring(toScan.getName().lastIndexOf('.'));
-			
-			if(extension.equals(".jar")) {
-				scanJARFile(toScan, methods);
-			} else {
-				try(FileInputStream file = new FileInputStream(filesToScan.get(i))) {
-					ClassReader reader = new ClassReader(file);
-					reader.accept(new ClassInspector(methods), 0);
-				} catch (FileNotFoundException e) {
-					System.out.println(e.getMessage());
-					continue;
-				} catch (IOException e) {
-					System.out.println(e.getMessage());
-					System.exit(-1);
-				}
-			}
-		}
-		
-		System.out.format("Number of methods: %d\n\n", methods.size());
-		
-		regexes = new ArrayList<>();
-		
-		if(regexFile == null) {
-			return;
-		}
-		
-		try(BufferedReader br = new BufferedReader(new FileReader(regexFile))) {
-			String regex = null;
-			while((regex = br.readLine()) != null) {
-				regexes.add(regex);
-			}
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
-			return;
-		} catch (IOException e) {
-			e.printStackTrace();
-			return;
-		}
-				
-		mappings = new LinkedHashMap<>();
-		
-		for(String regex : regexes) {
-			Pattern pat = Pattern.compile(regex);
-			ArrayList<String> mappedmethods = new ArrayList<>();
-			
-			for(String methodcall : methods) {
-				Matcher match = pat.matcher(methodcall);
-				if(match.find()) {
-					mappedmethods.add(methodcall);
-				}
-			}
-			
-			mappings.put(regex, mappedmethods);
 		}
 	}
 	
 	public static void main(String[] args) {
+		if(DEBUG_MODE) {
+			System.out.println("main: " + Thread.currentThread().getId());
+		}
+		
 		new RegexScanner();
+	}
+	
+	
+	private class JavaFileLoader extends SwingWorker<LinkedHashMap<String, ArrayList<String>>, Void> {
+		private File[] javaFiles = null;
+		private File regexFileToScan = null;
+		
+		public JavaFileLoader(File[] javaFilesToScan, File regexFileToScan) {
+			javaFiles = javaFilesToScan;
+			this.regexFileToScan = regexFileToScan;
+		}
+		
+		@Override
+		public LinkedHashMap<String, ArrayList<String>> doInBackground() {
+			if(DEBUG_MODE) {
+				System.out.println("JavaFileLoader doInBackground: " + Thread.currentThread().getId());
+			}
+			
+			LinkedHashSet<String> methods = new LinkedHashSet<>();
+			
+			for(File toScan : javaFiles) {
+				String extension = toScan.getName().substring(toScan.getName().lastIndexOf('.'));
+				
+				if(extension.equals(".jar")) {
+					scanJARFile(toScan, methods);
+				} else {
+					try(FileInputStream classFile = new FileInputStream(toScan)) {
+						ClassReader reader = new ClassReader(classFile);
+						reader.accept(new ClassInspector(methods), 0);
+					} catch (Exception e) {
+						System.out.format("ERROR: Problem reading file \"%s\"\n", toScan.getName());
+						System.out.println(e.getMessage());
+						continue;
+					}
+				}
+			}
+			
+			ArrayList<String> regexes = new ArrayList<>();
+			
+			if (regexFileToScan == null) {
+				return null;
+			}
+
+			try (BufferedReader br = new BufferedReader(new FileReader(regexFileToScan))) {
+				String regex = null;
+				while ((regex = br.readLine()) != null) {
+					regexes.add(regex);
+				}
+			} catch (FileNotFoundException e) {
+				e.printStackTrace();
+				return null;
+			} catch (IOException e) {
+				e.printStackTrace();
+				return null;
+			}
+			
+			LinkedHashMap<String, ArrayList<String>> mappings = new LinkedHashMap<>();
+			
+			for(String regex : regexes) {
+				Pattern pat = Pattern.compile(regex);
+				ArrayList<String> mappedmethods = new ArrayList<>();
+				
+				for(String methodcall : methods) {
+					Matcher match = pat.matcher(methodcall);
+					if(match.find()) {
+						mappedmethods.add(methodcall);
+					}
+				}
+				
+				mappings.put(regex, mappedmethods);
+			}
+			
+			return mappings;
+		}
+		
+		@Override
+		public void done() {
+			if(DEBUG_MODE) {
+				System.out.println("JavaFileLoader done: " + Thread.currentThread().getId());
+			}
+			
+			try {
+				generatedMappings = get();
+			} catch (InterruptedException | ExecutionException e) {
+				System.out.println("ERROR: Returning from JavaFileLoader execution\n");
+				System.out.println(e.getMessage());
+				e.printStackTrace();
+			}
+
+			generateComplete();
+		}
 	}
 }
