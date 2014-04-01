@@ -6,6 +6,7 @@ package com.coryjuhlin.PoCoTool;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.BufferedReader;
@@ -14,6 +15,8 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.File;
+import java.text.DecimalFormat;
+import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashSet;
@@ -29,6 +32,7 @@ import javax.swing.*;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.text.NumberFormatter;
 
 import org.objectweb.asm.ClassReader;
 
@@ -56,6 +60,8 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 	private JList<String> regexList;
 	private JList<String> methodList;
 	
+	private JLabel numMethodsValueLabel;
+	private JLabel numRegexValueLabel;
 	
 	private JFileChooser classFileChooser;
 	private JFileChooser regexFileChooser;
@@ -65,6 +71,7 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 	private File regexFile = null;
 	
 	private long generateStartTime = 0l;
+	private long numMethods = 0l;
 		
 	public RegexScanner() {
 		if(DEBUG_MODE) {
@@ -113,6 +120,7 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 			removeFileButton.setEnabled(false);
 			removeFileButton.setEnabled(false);
 			regexButton.setEnabled(false);
+			generateButton.setEnabled(false);
 			
 			generateStartTime = System.nanoTime();
 			
@@ -148,6 +156,9 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 			generationTimeLabel.setText(genTimeText);
 			
 			regexList.setListData(generatedMappings.keySet().toArray(new String[0]));
+			DecimalFormat formatter = new DecimalFormat("#,##0");
+			numRegexValueLabel.setText(formatter.format(generatedMappings.size()));
+			numMethodsValueLabel.setText(formatter.format(numMethods));
 		} else {
 			generationTimeLabel.setText(null);
 		}
@@ -156,6 +167,7 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 		removeFileButton.setEnabled(true);
 		removeFileButton.setEnabled(true);
 		regexButton.setEnabled(true);
+		generateButton.setEnabled(true);
 	}
 
 	public void initializeUI() {
@@ -227,6 +239,33 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 		
 		generationTimeLabel = new JLabel();
 		
+		// Create panel for generation stats
+		JPanel statsPanel = new JPanel();
+		statsPanel.setOpaque(false);
+		statsPanel.setBorder(BorderFactory.createTitledBorder("Generation Stats"));
+		
+		JPanel statsLabelPanel = new JPanel(new GridLayout(0,1));
+		statsLabelPanel.setOpaque(false);
+		JLabel numMethodsLabel = new JLabel("Unique methods:");
+		numMethodsLabel.setOpaque(false);
+		JLabel numRegexLabel = new JLabel("Regular Expressions:");
+		numRegexLabel.setOpaque(false);
+		statsLabelPanel.add(numMethodsLabel);
+		statsLabelPanel.add(numRegexLabel);
+		
+		JPanel statsValuePanel = new JPanel(new GridLayout(0,1));
+		statsValuePanel.setOpaque(false);
+		numMethodsValueLabel = new JLabel("0");
+		numMethodsValueLabel.setOpaque(false);
+		numRegexValueLabel = new JLabel("0");
+		numRegexValueLabel.setOpaque(false);
+		statsValuePanel.add(numMethodsValueLabel);
+		statsValuePanel.add(numRegexValueLabel);
+		
+		statsPanel.add(statsLabelPanel, BorderLayout.CENTER);
+		statsPanel.add(statsValuePanel, BorderLayout.LINE_END);
+		
+		fileSelectTabPanel.add(statsPanel);
 		
 		fileSelectTabPanel.add(fileButtonPanel);
 		
@@ -277,9 +316,17 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 		fileSelectionLayout.putConstraint(SpringLayout.SOUTH,
 				generationTimeLabel, -15, SpringLayout.NORTH, generateButton);
 
-		fileSelectionLayout
-				.putConstraint(SpringLayout.EAST, generationTimeLabel, -20,
+		fileSelectionLayout.putConstraint(SpringLayout.EAST, generationTimeLabel, -20,
 						SpringLayout.EAST, fileSelectTabPanel);
+		
+		fileSelectionLayout.putConstraint(SpringLayout.WEST, statsPanel, 15,
+						SpringLayout.HORIZONTAL_CENTER, fileSelectTabPanel);
+		
+		fileSelectionLayout.putConstraint(SpringLayout.EAST, statsPanel, -15,
+						SpringLayout.EAST, fileSelectTabPanel);
+		
+		fileSelectionLayout.putConstraint(SpringLayout.NORTH, statsPanel, 40,
+						SpringLayout.SOUTH, regexPanel);
 		
 		// Set up tab for displaying regex mappings
 		regexList = new JList<>();
@@ -378,6 +425,8 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 					}
 				}
 			}
+			
+			numMethods = methods.size();
 			
 			ArrayList<String> regexes = new ArrayList<>();
 			
