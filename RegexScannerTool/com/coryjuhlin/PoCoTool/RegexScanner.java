@@ -9,6 +9,8 @@ import java.awt.Dimension;
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.ItemEvent;
+import java.awt.event.ItemListener;
 import java.io.BufferedReader;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -16,7 +18,6 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.File;
 import java.text.DecimalFormat;
-import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashSet;
@@ -32,11 +33,10 @@ import javax.swing.*;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
-import javax.swing.text.NumberFormatter;
 
 import org.objectweb.asm.ClassReader;
 
-public class RegexScanner implements ActionListener, ListSelectionListener {
+public class RegexScanner implements ActionListener, ListSelectionListener, ItemListener {
 	public static final boolean DEBUG_MODE = false;
 	
 	private JFrame appframe;
@@ -65,6 +65,11 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 	
 	private JFileChooser classFileChooser;
 	private JFileChooser regexFileChooser;
+	
+	private JCheckBox runEliminatingPassCheckbox;
+	private boolean runEliminatingPass = true;
+	
+	private JLabel selectedRegexMethodCountLabel;
 
 	private LinkedHashMap<String, ArrayList<String>> generatedMappings;
 	
@@ -88,6 +93,21 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 				initializeUI();
 			}
 		});
+	}
+	
+	public void itemStateChanged(ItemEvent e) {
+		Object source = e.getItemSelectable();
+		boolean selected = false;
+		
+		if(e.getStateChange() == ItemEvent.SELECTED) {
+			selected = true;
+		} else if(e.getStateChange() == ItemEvent.DESELECTED) {
+			selected = false;
+		}
+		
+		if(source == runEliminatingPassCheckbox) {
+			runEliminatingPass = selected;
+		}
 	}
 	
 	public void actionPerformed(ActionEvent e) {
@@ -127,7 +147,7 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 			File[] files = new File[filesToScan.size()];
 			filesToScan.copyInto(files);
 			
-			(new JavaFileLoader(files, regexFile)).execute();
+			(new JavaFileLoader(files, regexFile, runEliminatingPass)).execute();
 		}
 		
 		if(filesToScan.size() > 0) {
@@ -144,6 +164,7 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 		String expr = regexList.getSelectedValue();
 		ArrayList<String> mappedMethods = generatedMappings.get(expr);
 		methodList.setListData(mappedMethods.toArray(new String[0]));
+		selectedRegexMethodCountLabel.setText("Count: " + mappedMethods.size());
 	}
 	
 	public void generateComplete() {
@@ -265,6 +286,12 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 		statsPanel.add(statsLabelPanel, BorderLayout.CENTER);
 		statsPanel.add(statsValuePanel, BorderLayout.LINE_END);
 		
+		// Set up the checkbox to do an eliminating pass
+		runEliminatingPassCheckbox = new JCheckBox("Do initial eliminating pass", true);
+		runEliminatingPassCheckbox.addItemListener(this);
+		
+		fileSelectTabPanel.add(runEliminatingPassCheckbox);
+		
 		fileSelectTabPanel.add(statsPanel);
 		
 		fileSelectTabPanel.add(fileButtonPanel);
@@ -317,16 +344,22 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 				generationTimeLabel, -15, SpringLayout.NORTH, generateButton);
 
 		fileSelectionLayout.putConstraint(SpringLayout.EAST, generationTimeLabel, -20,
-						SpringLayout.EAST, fileSelectTabPanel);
+				SpringLayout.EAST, fileSelectTabPanel);
 		
 		fileSelectionLayout.putConstraint(SpringLayout.WEST, statsPanel, 15,
-						SpringLayout.HORIZONTAL_CENTER, fileSelectTabPanel);
+				SpringLayout.HORIZONTAL_CENTER, fileSelectTabPanel);
 		
 		fileSelectionLayout.putConstraint(SpringLayout.EAST, statsPanel, -15,
-						SpringLayout.EAST, fileSelectTabPanel);
+				SpringLayout.EAST, fileSelectTabPanel);
 		
 		fileSelectionLayout.putConstraint(SpringLayout.NORTH, statsPanel, 40,
-						SpringLayout.SOUTH, regexPanel);
+				SpringLayout.SOUTH, regexPanel);
+		
+		fileSelectionLayout.putConstraint(SpringLayout.NORTH, runEliminatingPassCheckbox, 40,
+				SpringLayout.SOUTH, statsPanel);
+		
+		fileSelectionLayout.putConstraint(SpringLayout.WEST, runEliminatingPassCheckbox, 0,
+				SpringLayout.WEST, statsPanel);
 		
 		// Set up tab for displaying regex mappings
 		regexList = new JList<>();
@@ -338,10 +371,16 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 				new JScrollPane(regexList),
 				new JScrollPane(methodList));
 		
+		selectedRegexMethodCountLabel = new JLabel("Count: 0");
+		
+		JPanel splitPaneContainer = new JPanel(new BorderLayout());
+		splitPaneContainer.add(splitpane, BorderLayout.CENTER);
+		splitPaneContainer.add(selectedRegexMethodCountLabel, BorderLayout.PAGE_END);
+		
 		// Set up tabbed pane (one tab for file picking, another for results)
 		JTabbedPane tabpane = new JTabbedPane();
 		tabpane.addTab("File Selection", null, fileSelectTabPanel);
-		tabpane.addTab("RegEx Mapping", splitpane);
+		tabpane.addTab("RegEx Mapping", splitPaneContainer);
 		
 		appframe.add(tabpane);
 		
@@ -395,10 +434,12 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 	private class JavaFileLoader extends SwingWorker<LinkedHashMap<String, ArrayList<String>>, Void> {
 		private File[] javaFiles = null;
 		private File regexFileToScan = null;
+		private boolean doEliminatingPass = false;
 		
-		public JavaFileLoader(File[] javaFilesToScan, File regexFileToScan) {
+		public JavaFileLoader(File[] javaFilesToScan, File regexFileToScan, boolean doEliminatingPass) {
 			javaFiles = javaFilesToScan;
 			this.regexFileToScan = regexFileToScan;
+			this.doEliminatingPass = doEliminatingPass;
 		}
 		
 		@Override
@@ -426,8 +467,6 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 				}
 			}
 			
-			numMethods = methods.size();
-			
 			ArrayList<String> regexes = new ArrayList<>();
 			
 			if (regexFileToScan == null) {
@@ -437,7 +476,9 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 			try (BufferedReader br = new BufferedReader(new FileReader(regexFileToScan))) {
 				String regex = null;
 				while ((regex = br.readLine()) != null) {
-					regexes.add(regex);
+					if(regex.trim().length() > 0) {
+						regexes.add(regex);
+					}
 				}
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
@@ -446,6 +487,38 @@ public class RegexScanner implements ActionListener, ListSelectionListener {
 				e.printStackTrace();
 				return null;
 			}
+			
+			// RUN ELIMINATING PASS
+			if(doEliminatingPass) {
+				if(DEBUG_MODE) {
+					System.out.println("Running eliminating pass\n");
+				}
+				
+				StringBuilder megaRegex = new StringBuilder();
+				megaRegex.append('(');
+				for(String regex : regexes) {
+					megaRegex.append('(');
+					megaRegex.append(regex);
+					megaRegex.append(")|");
+				}
+				megaRegex.deleteCharAt(megaRegex.length() - 1);
+				megaRegex.append(')');
+
+				Pattern megaPat = Pattern.compile(megaRegex.toString());
+
+				LinkedHashSet<String> keepMethods = new LinkedHashSet<>();
+				for(String methodCall : methods) {
+					Matcher megaMatcher = megaPat.matcher(methodCall);
+					if(megaMatcher.find()) {
+						keepMethods.add(methodCall);
+					}
+				}
+
+				methods.retainAll(keepMethods);
+			}
+			// END ELIMINATING PASS
+			
+			numMethods = methods.size();
 			
 			LinkedHashMap<String, ArrayList<String>> mappings = new LinkedHashMap<>();
 			
