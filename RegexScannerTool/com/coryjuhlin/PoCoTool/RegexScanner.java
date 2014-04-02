@@ -23,7 +23,12 @@ import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.regex.Matcher;
@@ -37,7 +42,10 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 import org.objectweb.asm.ClassReader;
 
 public class RegexScanner implements ActionListener, ListSelectionListener, ItemListener {
-	public static final boolean DEBUG_MODE = false;
+	public static final boolean DEBUG_MODE = true;
+	private static final int NUM_THREADS = 4;
+	
+	private final ExecutorService pool;
 	
 	private JFrame appframe;
 	
@@ -67,7 +75,7 @@ public class RegexScanner implements ActionListener, ListSelectionListener, Item
 	private JFileChooser regexFileChooser;
 	
 	private JCheckBox runEliminatingPassCheckbox;
-	private boolean runEliminatingPass = true;
+	private boolean runEliminatingPass = false;
 	
 	private JLabel selectedRegexMethodCountLabel;
 
@@ -83,6 +91,8 @@ public class RegexScanner implements ActionListener, ListSelectionListener, Item
 			System.out.println("Init, before UI init: " + Thread.currentThread().getId());
 		}
 		
+		
+		
 		// Put UI Initialization on the Swing UI Event Thread
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() {
@@ -93,6 +103,8 @@ public class RegexScanner implements ActionListener, ListSelectionListener, Item
 				initializeUI();
 			}
 		});
+		
+		pool = Executors.newFixedThreadPool(NUM_THREADS);
 	}
 	
 	public void itemStateChanged(ItemEvent e) {
@@ -287,7 +299,7 @@ public class RegexScanner implements ActionListener, ListSelectionListener, Item
 		statsPanel.add(statsValuePanel, BorderLayout.LINE_END);
 		
 		// Set up the checkbox to do an eliminating pass
-		runEliminatingPassCheckbox = new JCheckBox("Do initial eliminating pass", true);
+		runEliminatingPassCheckbox = new JCheckBox("Do initial eliminating pass", false);
 		runEliminatingPassCheckbox.addItemListener(this);
 		
 		fileSelectTabPanel.add(runEliminatingPassCheckbox);
@@ -520,21 +532,61 @@ public class RegexScanner implements ActionListener, ListSelectionListener, Item
 			
 			numMethods = methods.size();
 			
-			LinkedHashMap<String, ArrayList<String>> mappings = new LinkedHashMap<>();
+			LinkedHashMap<String, ArrayList<String>> mappings = new LinkedHashMap<>(regexes.size());
 			
-			for(String regex : regexes) {
-				Pattern pat = Pattern.compile(regex);
-				ArrayList<String> mappedmethods = new ArrayList<>();
+			final int numRegexes = regexes.size();
+			final int regexPerThread = (int) Math.ceil((double) numRegexes / (double) NUM_THREADS);
+			
+			ArrayList<MapGenerator> toRun = new ArrayList<>(NUM_THREADS);
+			
+			int regexLeft = numRegexes;
+			for(int i = 0; i < NUM_THREADS; i++) {
+				int numToScan;
 				
-				for(String methodcall : methods) {
-					Matcher match = pat.matcher(methodcall);
-					if(match.find()) {
-						mappedmethods.add(methodcall);
-					}
+				if(regexLeft < regexPerThread) {
+					numToScan = regexLeft;
+				} else {
+					numToScan = regexPerThread;
 				}
 				
-				mappings.put(regex, mappedmethods);
+				toRun.add(new MapGenerator(methods, regexes, i * regexPerThread, numToScan));
+				
+				regexLeft -= numToScan;
 			}
+			
+
+			List<Future<LinkedHashMap<String, ArrayList<String>>>> futures;
+			
+			try {
+				futures = pool.invokeAll(toRun);
+			} catch (InterruptedException e) {
+				System.out.println("ERROR in MapGenerator thread");
+				e.printStackTrace();
+				return null;
+			}
+			
+			for(Future<LinkedHashMap<String, ArrayList<String>>> future : futures) {
+				try {
+					mappings.putAll(future.get());
+				} catch (InterruptedException | ExecutionException e) {
+					e.printStackTrace();
+					return null;
+				}
+			}
+			
+//			for(String regex : regexes) {
+//				Pattern pat = Pattern.compile(regex);
+//				ArrayList<String> mappedmethods = new ArrayList<>();
+//				
+//				for(String methodcall : methods) {
+//					Matcher match = pat.matcher(methodcall);
+//					if(match.find()) {
+//						mappedmethods.add(methodcall);
+//					}
+//				}
+//				
+//				mappings.put(regex, mappedmethods);
+//			}
 			
 			return mappings;
 		}
@@ -554,6 +606,46 @@ public class RegexScanner implements ActionListener, ListSelectionListener, Item
 			}
 
 			generateComplete();
+		}
+	}
+	
+	private class MapGenerator implements Callable<LinkedHashMap<String, ArrayList<String>>> {
+		private final int startIndex;
+		private final int numMaps;
+		private final ArrayList<String> regexList;
+		private final LinkedHashSet<String> methodList;
+		
+		public MapGenerator(LinkedHashSet<String> methodList, ArrayList<String> regexList, int startIndex, int numMaps) {
+			this.startIndex = startIndex;
+			this.numMaps = numMaps;
+			this.regexList = regexList;
+			this.methodList = methodList;
+		}
+		
+		@Override
+		public LinkedHashMap<String, ArrayList<String>> call() {
+			if(DEBUG_MODE) {
+				System.out.format("MapGenerator (Start: %d, Num: %d) call: %d\n\n", startIndex, numMaps, Thread.currentThread().getId());
+			}
+			
+			LinkedHashMap<String, ArrayList<String>> maps = new LinkedHashMap<>(numMaps);
+			
+			for(int i = startIndex; i < startIndex + numMaps; i++) {
+				String regex = regexList.get(i);
+				Pattern pat = Pattern.compile(regex);
+				ArrayList<String> mappedMethods = new ArrayList<>();
+				
+				for(String methodCall : methodList) {
+					Matcher match = pat.matcher(methodCall);
+					if(match.find()) {
+						mappedMethods.add(methodCall);
+					}
+				}
+				
+				maps.put(regex, mappedMethods);
+			}
+			
+			return maps;
 		}
 	}
 }
